@@ -1,0 +1,142 @@
+%-----------------------
+%Write in shell: openExample(uav/UAVObstacleAvoidanceInSimulinkExample")
+%-----------------------
+%-----------------------
+%Setup UAV scenario and drone
+%-----------------------
+%Create UAV scenario 
+Scenario = uavScenario("UpdateRate",100,"ReferenceLocation",[0 0 0]);
+%Create the indicator of the start point of the drone
+addMesh(Scenario,"cylinder",{[0 0 1] [0 .01]},[0 1 0]);
+%Setup initial position and orientation of the drone
+InitialPosition = [5 0 -7];
+InitialOrientation = [0 0 0];
+%Create a UAV platform 
+platUAV = uavPlatform("UAV",Scenario, "ReferenceFrame","NED", "InitialPosition",InitialPosition, "InitialOrientation",eul2quat(InitialOrientation));
+%Add quadrotor mesh 
+updateMesh(platUAV,"quadrotor",{1.2},[0 0 1],eul2tform([0 0 pi]));
+
+%------------------------
+%Setup LIDAR sensor
+%------------------------
+%Setup LIDAR resolution and parameters
+AzimuthResolution = 0.5;      
+ElevationResolution = 2;
+MaxRange = 7;
+AzimuthLimits = [-179 179];
+ElevationLimits = [-15 15];
+
+%Creates statistical model to generate point cloud
+LidarModel = uavLidarPointCloudGenerator("UpdateRate",10, "MaxRange",MaxRange, ...
+                                         "RangeAccuracy",3, ...
+                                         "AzimuthResolution",AzimuthResolution, ...
+                                         "ElevationResolution",ElevationResolution, ...
+                                         "AzimuthLimits",AzimuthLimits, ...
+                                         "ElevationLimits",ElevationLimits, ...                                       
+                                         "HasOrganizedOutput",true);
+%Create LIDAR sensor and attach it to the drone
+uavSensor("Lidar",platUAV,LidarModel, ...
+          "MountingLocation",[0 0 -0.4], ...
+          "MountingAngles",[0 0 180]);
+
+%Display the scenario
+show3D(Scenario);
+
+%--------------------
+%Setup obstacles 
+%--------------------
+%Setup obstacle dimensions and positions
+ObstaclePositions = [10 5; 10 15];
+ObstacleHeight = 15;                     
+ObstaclesWidth = 5;               
+%Add each obstacle to the scenario
+for i = 1:size(ObstaclePositions,1)
+    addMesh(Scenario,"polygon", ...
+        {[ObstaclePositions(i,1)-ObstaclesWidth/2 ObstaclePositions(i,2)-ObstaclesWidth/2; ...
+        ObstaclePositions(i,1)+ObstaclesWidth/2 ObstaclePositions(i,2)-ObstaclesWidth/2; ...
+        ObstaclePositions(i,1)+ObstaclesWidth/2 ObstaclePositions(i,2)+ObstaclesWidth/2; ...
+        ObstaclePositions(i,1)-ObstaclesWidth/2 ObstaclePositions(i,2)+ObstaclesWidth/2], ...
+        [0 ObstacleHeight]},0.651*ones(1,3));
+end
+%Setup additional obstacle dimensions and positions
+ObstaclePositions = [10 10];
+ObstacleHeight = 5;                 
+ObstaclesWidth = 5;                
+%Add each obstacle to the scenario
+for i = 1:size(ObstaclePositions,1)
+    addMesh(Scenario,"polygon", ...
+        {[ObstaclePositions(i,1)-ObstaclesWidth/2 ObstaclePositions(i,2)-ObstaclesWidth/2; ...
+        ObstaclePositions(i,1)+ObstaclesWidth/2 ObstaclePositions(i,2)-ObstaclesWidth/2; ...
+        ObstaclePositions(i,1)+ObstaclesWidth/2 ObstaclePositions(i,2)+ObstaclesWidth/2; ...
+        ObstaclePositions(i,1)-ObstaclesWidth/2 ObstaclePositions(i,2)+ObstaclesWidth/2], ...
+        [0 ObstacleHeight]},0.651*ones(1,3));
+end
+%Show scenario
+show3D(Scenario);
+legend("Start Position","Obstacles")
+%---------------------
+%Open model
+%---------------------
+open_system("ObstacleAvoidanceDemo.slx");
+
+%---------------------
+%Waypoints
+%---------------------
+%Setup waypoints for drone to goto
+Waypoints = [InitialPosition; 5 20 -7; 15 20 -7; 10 0 -12; 20 2 -12; 20 13 -15];
+
+%Add visualisation for the waypoints
+for i = 2:size(Waypoints,1)
+    addMesh(Scenario,"cylinder",{[Waypoints(i,2) Waypoints(i,1) 1] [0 0.1]},[1 0 0]);
+end
+%Show scenario
+show3D(Scenario);
+hold on
+plot3([InitialPosition(1,2); Waypoints(:,2)],[InitialPosition(1,2); Waypoints(:,1)],[-InitialPosition(1,3); -Waypoints(:,3)],"-g")
+legend(["Start Position","Obstacles","","","Waypoints","","","Direct Path"])
+
+%---------------------
+%Setup controller parameters
+%---------------------
+% Proportional Gains
+Px = 6;
+Py = 6;
+Pz = 6.5;
+
+% Derivative Gains
+Dx = 1.5;
+Dy = 1.5;
+Dz = 2.5;
+
+% Integral Gains
+Ix = 0;
+Iy = 0;
+Iz = 0;
+
+% Filter Coefficients
+Nx = 10;
+Ny = 10;
+Nz = 14.4947065605712; 
+
+%----------------------
+%Run simulation
+%----------------------
+%Setup additional parameters
+UAVSampleTime = 0.001;
+Gravity = 9.81;
+DroneMass = 0.1;
+
+%Simulate model
+out = sim("ObstacleAvoidanceDemo.slx");
+
+%Show scenario with the euclidean path and path taken by UAV
+hold on
+points = squeeze(out.trajectoryPoints(1,:,:))';
+plot3(points(:,2),points(:,1),-points(:,3),"-r");
+legend(["Start Position","Obstacles","","","Waypoints","","","Direct Path","UAV Trajectory"])
+
+
+
+
+
+
